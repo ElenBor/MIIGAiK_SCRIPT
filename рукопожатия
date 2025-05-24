@@ -1,0 +1,67 @@
+import requests
+from bs4 import BeautifulSoup
+from collections import deque
+import time
+
+class WikipediaConnectionFinder:
+    def __init__(self, limit):
+        self.limit = limit
+        self.visited = set()
+
+    def get_links(self, url):
+        """ Извлекаем ссылки на статьи Википедии из указанного URL. """
+        time.sleep(1)  # Соблюдаем ограничение по частоте запросов
+        response = requests.get(url)
+        soup = BeautifulSoup(response.content, 'html.parser')
+
+        # Получаем ссылки только из основного контента и из раздела References
+        articles = set()
+        for link in soup.select('p a[href^="/wiki/"], ol a[href^="/wiki/"]'):
+            article_url = "https://en.wikipedia.org" + link['href']
+            articles.add(article_url)
+
+        return articles
+
+    def find_path(self, start_url, target_url):
+        """ Находим путь от стартовой ссылки до целевой. """
+        queue = deque([(start_url, [start_url])])
+        self.visited.add(start_url)
+
+        while queue:
+            current_url, path = queue.popleft()
+
+            if current_url == target_url:
+                return path
+
+            if len(path) > 5:  # Ограничим глубину поиска
+                continue
+
+            for link in self.get_links(current_url):
+                if link not in self.visited and len(self.visited) < self.limit:
+                    self.visited.add(link)
+                    queue.append((link, path + [link]))
+
+        return None
+
+def main():
+    url1 = "https://en.wikipedia.org/wiki/Six_degrees_of_separation"
+    url2 = "https://en.wikipedia.org/wiki/American_Broadcasting_Company"
+    limit = 10  # Максимальное количество запросов
+
+    finder = WikipediaConnectionFinder(limit)
+
+    path1_to_2 = finder.find_path(url1, url2)
+    path2_to_1 = finder.find_path(url2, url1)
+
+    if path1_to_2:
+        print("url1 =>", " => ".join(path1_to_2))
+    else:
+        print("Нет связи от", url1, "до", url2)
+
+    if path2_to_1:
+        print("url2 =>", " => ".join(path2_to_1))
+    else:
+        print("Нет связи от", url2, "до", url1)
+
+if __name__ == "__main__":
+    main()
